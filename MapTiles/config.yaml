@@ -1,0 +1,28 @@
+## format:
+##
+# zones:
+#   Your zone name:
+#     regions:
+#       - X,Y,X2,Y2  # STRING with 2 points comma separated and
+#       - X,Y,X2,Y2  # second area under the same name. not every place fits in one single square, right?
+#       - 42.2,-8.7,42.1,-8.6  # example for some area in Vigo, Spain
+#     zoom:  # optional
+#       in: 8  # Should define how close the zoom gets. More zoom implies more data to download! (paid account?)
+#       out: 1  # (defaults to 1) defines how far the zoom gets
+# map: # optional section
+#  style: map_style  # defaults to atlas
+zones:
+  Texas:
+    zoom:
+      out: 6
+      in: 11
+    regions:
+      - 25.585801,-106.743164,36.548259,-93.603516
+map:
+  style: atlas  # make it make sense with your provider! (ex: atlas for thunderforest or osm-liberty for geoapify
+  provider: thunderforest  # valid providers: geoapify, thunderforest
+
+
+  #Southwest: 25.585801, -106.743164
+
+  #Northeast: 36.548259, -93.603516

@@ -25,10 +25,10 @@ if not AIRTABLE_API_KEY or not BASE_ID or not TABLE_NAME:
     exit(1)
 
 # Enable Debug Mode
-DEBUG_MODE = True  # Set to False to disable debug prints
+DEBUG_MODE = False  # Set to False to disable debug prints
 
 # Parse command-line arguments
-parser = argparse.ArgumentParser(description="Update Airtable with Meshtastic Node Data and Export Config")
+parser = argparse.ArgumentParser(description="Update Airtable with Meshtastic Node Data")
 parser.add_argument("--host", help="IP address of Meshtastic node")
 parser.add_argument("--port", help="Serial port for Meshtastic node")
 parser.add_argument("--ble", help="Bluetooth address for Meshtastic node")
@@ -39,19 +39,15 @@ args = parser.parse_args()
 if args.host:
     meshtastic_command = f"meshtastic --host {args.host} --info --no-nodes"
     connection_type = f"Using HOST: {args.host}"
-    export_command = f"meshtastic --export-config --host {args.host}"
 elif args.port:
     meshtastic_command = f"meshtastic --port {args.port} --info --no-nodes"
     connection_type = f"Using PORT: {args.port}"
-    export_command = f"meshtastic --export-config --port {args.port}"
 elif args.ble:
     meshtastic_command = f"meshtastic --ble {args.ble} --info --no-nodes"
     connection_type = f"Using BLE: {args.ble}"
-    export_command = f"meshtastic --export-config --ble {args.ble}"
 else:
     meshtastic_command = "meshtastic --info --no-nodes"
     connection_type = "Using DEFAULT CONNECTION (serial or localhost)"
-    export_command = "meshtastic --export-config"
 
 print(f"🔄 Running Meshtastic Command: {meshtastic_command}")
 print(f"📡 {connection_type}")
@@ -60,16 +56,6 @@ print(f"📡 {connection_type}")
 def run_meshtastic_command():
     output = os.popen(meshtastic_command).read()
     return output.strip()
-
-# Function to export node config
-def export_node_config(node_id):
-    node_id_clean = node_id.lstrip("!")  # Remove leading "!"
-    desktop_path = os.path.expanduser(f"~/Desktop/{node_id_clean}.cfg")
-    full_export_command = f"{export_command} > {desktop_path}"
-
-    print(f"💾 Exporting config: {full_export_command}")
-    os.system(full_export_command)  # Redirect stdout to file
-    print(f"✅ Config saved to: {desktop_path}")
 
 # Function to extract relevant data from the output
 def parse_meshtastic_output(output):
@@ -170,7 +156,6 @@ output = run_meshtastic_command()
 parsed_data = parse_meshtastic_output(output)
 
 if parsed_data:
-    export_node_config(parsed_data["Node ID"])  # Export config to ~/Desktop
     airtable_record_id = find_airtable_record_by_node_id(parsed_data["Node ID"])
     
     if airtable_record_id:
