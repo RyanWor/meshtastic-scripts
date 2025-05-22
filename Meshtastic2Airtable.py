@@ -28,7 +28,7 @@ if not AIRTABLE_API_KEY or not BASE_ID or not TABLE_NAME:
 DEBUG_MODE = True  # Set to False to disable debug prints
 
 # Parse command-line arguments
-parser = argparse.ArgumentParser(description="Update Airtable with Meshtastic Node Data")
+parser = argparse.ArgumentParser(description="Update Airtable with Meshtastic Node Data and Export Config")
 parser.add_argument("--host", help="IP address of Meshtastic node")
 parser.add_argument("--port", help="Serial port for Meshtastic node")
 parser.add_argument("--ble", help="Bluetooth address for Meshtastic node")
@@ -39,15 +39,19 @@ args = parser.parse_args()
 if args.host:
     meshtastic_command = f"meshtastic --host {args.host} --info --no-nodes"
     connection_type = f"Using HOST: {args.host}"
+    export_command = f"meshtastic --export-config --host {args.host}"
 elif args.port:
     meshtastic_command = f"meshtastic --port {args.port} --info --no-nodes"
     connection_type = f"Using PORT: {args.port}"
+    export_command = f"meshtastic --export-config --port {args.port}"
 elif args.ble:
     meshtastic_command = f"meshtastic --ble {args.ble} --info --no-nodes"
     connection_type = f"Using BLE: {args.ble}"
+    export_command = f"meshtastic --export-config --ble {args.ble}"
 else:
     meshtastic_command = "meshtastic --info --no-nodes"
     connection_type = "Using DEFAULT CONNECTION (serial or localhost)"
+    export_command = "meshtastic --export-config"
 
 print(f"🔄 Running Meshtastic Command: {meshtastic_command}")
 print(f"📡 {connection_type}")
@@ -57,17 +61,29 @@ def run_meshtastic_command():
     output = os.popen(meshtastic_command).read()
     return output.strip()
 
+# Function to export node config
+def export_node_config(node_id):
+    node_id_clean = node_id.lstrip("!")  # Remove leading "!"
+    desktop_path = os.path.expanduser(f"~/Desktop/{node_id_clean}.cfg")
+    full_export_command = f"{export_command} > {desktop_path}"
+
+    print(f"💾 Exporting config: {full_export_command}")
+    os.system(full_export_command)  # Redirect stdout to file
+    print(f"✅ Config saved to: {desktop_path}")
+
 # Function to extract relevant data from the output
 def parse_meshtastic_output(output):
     try:
         nodes_match = re.search(r'Nodes in mesh: (\{.*?\})\n\nPreferences:', output, re.DOTALL)
         metadata_match = re.search(r'Metadata: (\{.*?\})', output)
+        security_match = re.search(r'"security": (\{.*?\}),', output, re.DOTALL)
 
-        if not nodes_match or not metadata_match:
+        if not nodes_match or not metadata_match or not security_match:
             return None
 
         nodes_json = json.loads(nodes_match.group(1))
         metadata_json = json.loads(metadata_match.group(1))
+        security_json = json.loads(security_match.group(1))
 
         first_node_key = list(nodes_json.keys())[0]
         first_node = nodes_json[first_node_key]
@@ -76,15 +92,16 @@ def parse_meshtastic_output(output):
         device_metrics = first_node.get("deviceMetrics", {})
 
         data = {
-            "node_id": first_node_key,
-            "long_name": user_info.get("longName", ""),
-            "short_name": user_info.get("shortName", ""),
-            "hardware": user_info.get("hwModel", ""),
-            "node_number": str(first_node.get("num", "")),  
-            "mac_address": user_info.get("macaddr", ""),
-            "public_key": user_info.get("publicKey", ""),
-            "role": metadata_json.get("role", ""),
-            "firmware_version": metadata_json.get("firmwareVersion", ""),
+            "Node ID": first_node_key,  # Unique identifier
+            "Long Name": user_info.get("longName", ""),
+            "Short Name": user_info.get("shortName", ""),
+            "Hardware": user_info.get("hwModel", ""),
+            "Node Number": str(first_node.get("num", "")),  
+            "MAC Address": user_info.get("macaddr", ""),
+            "Public Key": security_json.get("publicKey", ""),
+            "Private Key": security_json.get("privateKey", ""),  # Extract private key
+            "Role": metadata_json.get("role", ""),
+            "Firmware": metadata_json.get("firmwareVersion", ""),
         }
 
         if DEBUG_MODE:
@@ -126,7 +143,7 @@ def update_airtable_record(airtable_record_id, data):
     response = requests.patch(url, json=payload, headers=headers)
 
     if response.status_code == 200:
-        print(f"✅ Updated record {airtable_record_id} for Node ID: {data['node_id']}")
+        print(f"✅ Updated record {airtable_record_id} for Node ID: {data['Node ID']}")
     else:
         print(f"❌ Error updating record: {response.status_code}, {response.text}")
 
@@ -144,7 +161,7 @@ def create_airtable_record(data):
     response = requests.post(url, json=payload, headers=headers)
 
     if response.status_code == 200:
-        print(f"✅ Created new record for Node ID: {data['node_id']}")
+        print(f"✅ Created new record for Node ID: {data['Node ID']}")
     else:
         print(f"❌ Error creating record: {response.status_code}, {response.text}")
 
@@ -153,7 +170,8 @@ output = run_meshtastic_command()
 parsed_data = parse_meshtastic_output(output)
 
 if parsed_data:
-    airtable_record_id = find_airtable_record_by_node_id(parsed_data["node_id"])
+    export_node_config(parsed_data["Node ID"])  # Export config to ~/Desktop
+    airtable_record_id = find_airtable_record_by_node_id(parsed_data["Node ID"])
     
     if airtable_record_id:
         update_airtable_record(airtable_record_id, parsed_data)
